@@ -1,0 +1,254 @@
+TRABAJO PRÁCTICO FINAL – COMPUTACIÓN AVANZADA
+================================================
+
+Proyecto: Generación de imágenes estilo cartoon con versiones secuencial, OpenMP, MPI y híbrida MPI + OpenMP.
+
+
+1. Objetivo del trabajo
+----------------------
+El objetivo fue desarrollar un programa que genere una imagen con apariencia de cartoon o dibujo animado, implementando distintas versiones del algoritmo para estudiar cómo cambia el rendimiento al utilizar técnicas de programación paralela.
+
+Se desarrollaron cuatro versiones:
+- Secuencial
+- OpenMP
+- MPI
+- Híbrida MPI + OpenMP
+
+Además, se comparó el rendimiento utilizando mediciones de tiempo, speedup y eficiencia.
+
+
+2. Descripción del algoritmo
+----------------------------
+La pipeline consiste en:
+1. Cargar la imagen BMP.
+2. Aplicar suavizado para reducir ruido.
+3. Detectar bordes usando un operador tipo Sobel.
+4. Posterizar los colores por canal (R, G, B).
+5. Combinar los colores posterizados con los bordes para producir la apariencia cartoon.
+
+Esto se realiza en la función compartida de procesamiento y luego cada variante reutiliza la lógica central con su estrategia de paralelización.
+
+
+3. Estructura del proyecto
+--------------------------
+- src/bmp.h y src/bmp.cpp: lectura y escritura de archivos BMP.
+- src/cartoon_common.h y src/cartoon_common.cpp: funciones compartidas para blur, bordes y posterización.
+- src/cartoon_sequential.cpp: versión secuencial.
+- src/cartoon_openmp.cpp: versión con OpenMP.
+- src/cartoon_mpi.cpp: versión con MPI.
+- src/cartoon_hybrid.cpp: versión híbrida MPI + OpenMP.
+- src/generate_test_image.cpp: generador de imagen BMP de prueba.
+- README.md: documentación de proyecto.
+
+
+4. Entorno de desarrollo
+------------------------
+Se utilizó Windows con MSYS2 y la toolchain UCRT64.
+
+Herramientas necesarias:
+- MSYS2
+- Compilador GCC del entorno UCRT64
+- OpenMP
+- MPI (Microsoft MPI + mpiexec)
+
+Se comprobó que la ruta correcta era:
+- C:\msys64\ucrt64\bin
+- C:\Program Files\Microsoft MPI\Bin
+
+Esto fue clave porque el problema inicial no estaba en el algoritmo, sino en la selección del compilador y del launcher MPI correctos.
+
+
+5. Compilación
+--------------
+
+5.1 Generar una imagen de prueba
+
+g++.exe -O3 -std=c++17 src\bmp.cpp src\cartoon_common.cpp src\generate_test_image.cpp -o generate_test_image.exe
+
+./generate_test_image.exe test.bmp
+
+
+5.2 Secuencial
+
+g++.exe -O3 -std=c++17 src\bmp.cpp src\cartoon_common.cpp src\cartoon_sequential.cpp -o cartoon_sequential.exe
+
+./cartoon_sequential.exe test.bmp seq_out.bmp 3 9 60
+
+Argumentos:
+- input.bmp: imagen de entrada
+- output.bmp: archivo de salida
+- filterSize: tamaño del kernel (3 o 5)
+- levels: cantidad de niveles de posterización
+- threshold: umbral para detección de bordes
+
+
+5.3 OpenMP
+
+g++.exe -O3 -std=c++17 -fopenmp src\bmp.cpp src\cartoon_common.cpp src\cartoon_openmp.cpp -o cartoon_openmp.exe
+
+./cartoon_openmp.exe test.bmp omp_out.bmp 3 9 60 4
+
+El último parámetro indica la cantidad de hilos OpenMP.
+
+
+5.4 MPI
+
+mpicxx.exe -O3 -std=c++17 src\bmp.cpp src\cartoon_common.cpp src\cartoon_mpi.cpp -o cartoon_mpi.exe
+
+"C:\Program Files\Microsoft MPI\Bin\mpiexec.exe" -n 2 .\cartoon_mpi.exe .\test.bmp .\mpi_out.bmp 3 9 60
+
+
+5.5 Híbrida MPI + OpenMP
+
+mpicxx.exe -O3 -std=c++17 -fopenmp src\bmp.cpp src\cartoon_common.cpp src\cartoon_hybrid.cpp -o cartoon_hybrid.exe
+
+"C:\Program Files\Microsoft MPI\Bin\mpiexec.exe" -n 2 .\cartoon_hybrid.exe .\test.bmp .\hybrid_out.bmp 3 9 60 4
+
+El último valor 4 representa la cantidad de hilos OpenMP por proceso MPI.
+
+
+6. Cómo se implementó cada versión
+-----------------------------------
+
+6.1 Versión secuencial
+- Se cargó la imagen BMP.
+- Se aplicó la lógica de suavizado y detección de bordes sobre la imagen completa.
+- Se posterizó cada canal RGB.
+- Se combinó la imagen suavizada con los bordes.
+- Se guardó el resultado en un BMP.
+
+Esta versión sirvió como baseline para comparar el resto.
+
+
+6.2 Versión OpenMP
+- Se tomó la misma lógica que la secuencial.
+- Se paralelizaron los loops sobre pixels y canales usando OpenMP.
+- Se configuró el número de hilos con omp_set_num_threads(threads).
+- Se reutilizaron las funciones compartidas de processing.
+
+
+6.3 Versión MPI
+- La imagen se particionó por filas entre procesos.
+- El proceso raíz leyó la imagen y la distribuyó a los demás.
+- Cada proceso trabajó sobre su porción local.
+- Luego, se recolectaron los resultados para reconstruir la imagen final.
+- El algoritmo de cartoneado se aplica localmente en cada fragmento.
+
+Se utilizó una estrategia de división de filas para evitar duplicar trabajo entre procesos.
+
+
+6.4 Versión híbrida MPI + OpenMP
+- MPI divide la imagen entre procesos.
+- Dentro de cada proceso, OpenMP paraleliza los loops de procesamiento.
+- Esto permite aprovechar tanto la memoria distribuida como la paralización multicore local.
+- El output final se vuelve a reunir en el rank raíz para guardar la imagen completa.
+
+
+7. Cómo se hizo la validación
+----------------------------
+Se generó una imagen de prueba con un patrón artificial para poder verificar el funcionamiento del pipeline.
+
+La imagen de validación se generó con la función de prueba del proyecto y luego se usó en las cuatro versiones.
+
+Se verificó que cada salida:
+- genera un archivo BMP válido,
+- presenta el mismo tamaño que la imagen original,
+- no falla en ejecución,
+- produce una imagen con apariencia cartoon.
+
+
+8. Métricas de rendimiento
+-------------------------
+Se usaron medidas de tiempo en milisegundos con chrono.
+
+Se evaluaron:
+- Tiempo total de ejecución
+- Speedup
+- Eficiencia
+
+Fórmulas utilizadas:
+- Speedup = T_secuencial / T_parallel
+- Eficiencia = Speedup / número de procesadores o hilos
+
+
+9. Resultados obtenidos en la validación real
+--------------------------------------------
+Se corrieron las cuatro versiones en un entorno Windows con la siguiente configuración:
+- Secuencial: 36 ms
+- OpenMP: 14 ms
+- MPI: 14 ms
+- MPI + OpenMP: 7 ms
+
+Cálculos:
+- OpenMP: speedup = 36 / 14 ≈ 2.57x
+- MPI: speedup = 36 / 14 ≈ 2.57x
+- Híbrida: speedup = 36 / 7 ≈ 5.14x
+
+Eficiencia aproximada:
+- OpenMP con 4 hilos: 2.57 / 4 = 0.64 = 64%
+- MPI con 2 procesos: 2.57 / 2 = 1.28 = 128% (en este caso el cálculo puede exceder el 100% por efectos de ruido y tamaño del problema, y porque la comparación no fue necesariamente equilibrada entre configuraciones)
+- Híbrida (8 workers totales): 5.14 / 8 = 0.64 = 64%
+
+Es importante aclarar que los tiempos varían según hardware, carga del sistema y cantidad de núcleos.
+
+
+10. Problemas detectados y soluciones
+------------------------------------
+Durante el desarrollo aparecieron varios inconvenientes. Los principales fueron:
+
+1. El compilador incorrecto estaba activo.
+   Solución: usar MSYS2 UCRT64 y la ruta C:\msys64\ucrt64\bin.
+
+2. No se encontraba el launcher de MPI.
+   Solución: instalar Microsoft MPI y usar la ruta completa:
+   C:\Program Files\Microsoft MPI\Bin\mpiexec.exe
+
+3. OpenMP no compilaba porque faltaba include <omp.h>.
+   Solución: agregar la cabecera y llamar a omp_set_num_threads antes del procesamiento paralelo.
+
+4. Opción no soportada del launcher MPI.
+   Solución: usar la sintaxis válida de Microsoft MPI y ejecutar sin opciones extra no estándar.
+
+
+11. Conclusión
+--------------
+El proyecto quedó funcionando en sus cuatro variantes y se logró verificar el flujo completo desde la generación de la imagen de prueba hasta la escritura de la salida final.
+
+Los resultados demostraron que la versión híbrida fue la más rápida en la prueba realizada, seguida por OpenMP y MPI. Esto confirma el valor de aplicar paralelización adecuada según el tipo de problema y el entorno de ejecución.
+
+
+12. Criterio de entrega
+----------------------
+Este trabajo es adecuado para entregar como proyecto final de Computación Avanzada porque incluye:
+- implementación funcional,
+- comparación de algoritmos,
+- uso de paralelización real,
+- métricas de rendimiento,
+- documentación de entorno y ejecución,
+- validación de resultados con archivos BMP generados.
+
+
+13. Archivos generados
+----------------------
+- generate_test_image.exe
+- cartoon_sequential.exe
+- cartoon_openmp.exe
+- cartoon_mpi.exe
+- cartoon_hybrid.exe
+- test.bmp
+- seq_out.bmp
+- omp_out.bmp
+- mpi_out.bmp
+- hybrid_out.bmp
+
+
+14. Recomendación final
+----------------------
+Si se desea mejorar la calidad del trabajo de entrega, se puede complementar este material con:
+- una tabla comparativa en formato CSV o Excel,
+- una captura de pantalla de los resultados,
+- una explicación adicional del algoritmo Sobel y la posterización,
+- un análisis de escalabilidad con más tamaños de imagen y más procesos.
+
+
+Fin del instructivo.

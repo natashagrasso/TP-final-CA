@@ -1,0 +1,179 @@
+DETALLE DE CÓMO LO ARMAMOS PASO A PASO
+======================================
+
+
+Etapa 1: Definición del problema
+---------------------------------
+Se planteó la necesidad de generar una imagen estilo cartoon con distintas versiones del algoritmo para comparar rendimiento. La idea central era reutilizar la misma lógica de procesamiento y variar únicamente la forma en que se paralelizaba.
+
+
+Etapa 2: Análisis y diseño de la pipeline
+------------------------------------------
+Se definió la siguiente secuencia:
+1. Leemos la imagen.
+2. Convertimos a un arreglo de pixeles RGB.
+3. Aplicamos filtro de suavizado para rebajar ruido.
+4. Calculamos bordes siguiendo una lógica tipo Sobel.
+5. Posterizamos los canales RGB.
+6. Mezclamos colores con bordes para obtener apariencia cartoon.
+
+Se decidió trabajar sobre BMP porque es un formato simple y fácilmente manipulable sin dependencias extra.
+
+
+Etapa 3: Implementación de I/O BMP
+-----------------------------------
+Se creó la base para lectura y escritura de imágenes en BMP.
+
+Se definieron:
+- RGB
+- Image
+- makeImage
+- loadBMP
+- saveBMP
+- generateTestImage
+
+Esto permitió generar imágenes sintéticas para pruebas y validar el resultado de cada implementación con archivos reales.
+
+
+Etapa 4: Implementación de la lógica común
+------------------------------------------
+Se modularizó el procesamiento en funciones compartidas:
+- blur
+- detectEdges
+- posterize
+- cartoonize
+
+Luego se desarrollaron versiones para:
+- secuencial
+- OpenMP
+- MPI
+- híbrida
+
+Esto evitó duplicar la lógica del algoritmo y garantizó que todas las variantes procesaran la misma imagen.
+
+
+Etapa 5: Implementación secuencial
+----------------------------------
+Se empezó por la base más simple. La versión secuencial:
+- carga la imagen,
+- procesa toda la matriz de píxeles,
+- guarda la salida,
+- mide el tiempo total.
+
+Se verificó que la imagen se generaba correctamente antes de avanzar a la paralelización.
+
+
+Etapa 6: Implementación OpenMP
+------------------------------
+Se reutilizó la lógica secuencial y se reemplazó la parte de procesamiento por loops paralelos con OpenMP.
+
+Se comprendió que el punto crítico era:
+- incluir omp.h,
+- usar omp_set_num_threads,
+- evitar configuraciones incorrectas dentro de construcción master.
+
+Cuando se corrigió esto, la compilación y ejecución funcionaron correctamente.
+
+
+Etapa 7: Implementación MPI
+---------------------------
+La idea fue dividir la imagen por filas entre procesos.
+
+Se hicieron estas tareas:
+- Rank 0 lee la imagen.
+- Se comparte el tamaño de la imagen con todos los procesos.
+- Se calculan las filas correspondientes a cada proceso.
+- Se distribuye la imagen mediante Scatterv.
+- Cada proceso aplica la transformación sobre su porción local.
+- Se recolectan los resultados con Gatherv.
+- El proceso 0 guarda la imagen final.
+
+La parte más delicada fue la coordinación de buffers y desplazamientos para que cada proceso recibiera las filas correctas.
+
+
+Etapa 8: Implementación híbrida MPI + OpenMP
+--------------------------------------------
+Se combinaron ambos niveles de paralelización:
+- MPI para distribuir el trabajo entre procesos.
+- OpenMP para paralelizar el trabajo dentro de cada proceso.
+
+Esto permitió capturar mejor la estructura del problema y aprobechar la capacidad multicomputadora y multicore simultáneamente.
+
+
+Etapa 9: Validación del funcionamiento
+------------------------------------
+Se generó una imagen de prueba y se ejecutó cada versión con parámetros fijos.
+
+Se validó que:
+- el programa compilaba,
+- la imagen de entrada se leía bien,
+- la imagen de salida se escribía en formato BMP,
+- el archivo tenía el tamaño correcto,
+- el contenido era coherente con la pipeline cartoon.
+
+Esto se corroboró con archivos reales:
+- test.bmp
+- seq_out.bmp
+- omp_out.bmp
+- mpi_out.bmp
+- hybrid_out.bmp
+
+
+Etapa 10: Benchmarking y medición
+----------------------------------
+Se midió el tiempo de ejecución con std::chrono.
+
+Se compararon las cuatro versiones y se calculó:
+- tiempo total,
+- speedup,
+- eficiencia.
+
+La estrategia produjo resultados claramente diferenciados, con una mejora evidentemente mejor en la version híbrida en la prueba ejecutada.
+
+
+Etapa 11: Detección de errores y correcciones
+--------------------------------------------
+Aparecieron varios problemas reales que no eran del algoritmo sino del entorno:
+
+1. El compilador no era el correcto.
+   - Solución: usar MSYS2 + UCRT64.
+
+2. No aparecía mpiexec.exe.
+   - Solución: instalar Microsoft MPI y usar la ruta completa.
+
+3. OpenMP no reconocía omp_set_num_threads.
+   - Solución: agregar include <omp.h>.
+
+4. El launcher de MPI no aceptaba una opción no soportada.
+   - Solución: usar la sintaxis correcta para Windows.
+
+5. Se estaban ejecutando comandos desde rutas incompatibles.
+   - Solución: fijar el directorio de trabajo correcto y usar rutas válidas.
+
+
+Etapa 12: Resultado final
+-------------------------
+Se logró completar un proyecto funcional con:
+- cuatro versiones del algoritmo,
+- validación real de ejecución,
+- mediciones de desempeño,
+- generación de imagen de salida BMP,
+- documentación y comparativa.
+
+Esto deja al proyecto listo para ser entregado como trabajo práctico final.
+
+
+Etapa 13: Qué aprendimos
+------------------------
+- La paralelización no es un ajuste trivial; requiere entender la estructura del problema.
+- El entorno de compilación es tan importante como el código.
+- El benchmarking debe hacerse con datos reales y no con supuestos.
+- La combinación de MPI + OpenMP puede ofrecer mejoras relevantes cuando el problema se distribuye bien.
+- La validación de la salida es imprescindible para asegurar que la optimización no cambió la lógica.
+
+
+Etapa 14: Cierre
+---------------
+La solución final quedó armada, probada y documentada. El código de cada variante se encuentra en el proyecto, y la evidencia de ejecución quedó respaldada por las imágenes generadas y los tiempos medidos.
+
+Fin del detalle.

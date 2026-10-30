@@ -1,0 +1,26 @@
+# Compilados / binarios
+*.exe
+*.out
+*.obj
+*.dll
+*.lib
+*.a
+*.so
+
+# Salidas de imagen generadas
+*.bmp
+
+# Directorios de build
+build/
+bin/
+obj/
+Debug/
+Release/
+
+# VS / editor
+.vs/
+.idea/
+.vscode/
+
+# Git
+.git/
